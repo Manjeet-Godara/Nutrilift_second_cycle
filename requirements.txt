@@ -1,0 +1,5 @@
+Django==4.2.14
+mysqlclient==2.2.4
+gunicorn==21.2.0
+uvicorn==0.30.1
+python-dotenv==1.0.1
