@@ -26,6 +26,7 @@ urlpatterns = [
     path("screening/", include("screening.urls")),
     path("", include("messaging.urls")),
     path("", include("assist.urls")),
+    path("", include("program.urls")),
 ]
 
 
