@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from celery.schedules import crontab
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -24,7 +25,7 @@ INSTALLED_APPS = [
     "audit",
     "messaging",
     "assist",
-    "program",
+    "program.apps.ProgramConfig",  # <- make sure it's this dotted path
 ]
 
 MIDDLEWARE = [
@@ -90,3 +91,14 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Admin URL (harden in staging/prod)
 ADMIN_URL = os.getenv("ADMIN_URL", "admin")
+
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/1")
+CELERY_TIMEZONE = TIME_ZONE
+
+CELERY_BEAT_SCHEDULE = {
+    "compliance-reminders-15min": {
+        "task": "program.tasks.send_compliance_due_reminders",
+        "schedule": crontab(minute="*/15"),
+    },
+}

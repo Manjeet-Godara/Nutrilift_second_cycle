@@ -4,3 +4,5 @@ gunicorn==21.2.0
 uvicorn==0.30.1
 python-dotenv==1.0.1
 requests==2.32.3
+celery==5.3.6
+redis==5.0.1 

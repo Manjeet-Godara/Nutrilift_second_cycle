@@ -1,1 +1,2 @@
-# empty; just here so Python treats as a package
+from .celery import app as celery_app
+__all__ = ("celery_app",)

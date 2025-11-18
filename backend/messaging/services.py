@@ -104,3 +104,52 @@ def send_redflag_assistance(screening: Screening) -> MessageLog:
     log.sent_at = timezone.now()
     log.save(update_fields=["provider_msg_id","status","sent_at","updated_at"])
     return log
+
+# add to TEMPLATE_NAME mapping 
+TEMPLATE_NAME.update({
+    "COMPLIANCE_REMINDER_V1": "nutrilift_compliance_reminder_v1",  # name in your WABA
+}) 
+
+def send_compliance_reminder(supply) -> MessageLog:
+    """
+    Sends a WhatsApp reminder to complete Day-27 compliance.
+    """
+    from django.urls import reverse
+    from django.conf import settings
+    from roster.models import Guardian
+
+    org = supply.enrollment.organization
+    student = supply.enrollment.student
+    guardian = student.primary_guardian
+    phone = guardian.phone_e164 if guardian else ""
+
+    base = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    link = f"{base}{reverse('program:compliance_form', args=[supply.qr_token])}"
+
+    lang = choose_language(getattr(guardian, "preferred_language", None), getattr(org, "locale", None))
+    components = {
+        # Adjust placeholders to your approved WABA template
+        "body": [
+            student.full_name,  # {{1}} Child Name
+            link,               # {{2}} Link to compliance form
+        ],
+        "buttons": [link],     # URL button 0 -> {{1}} dynamic URL
+    }
+
+    log = MessageLog.objects.create(
+        organization=org,
+        to_phone_e164=phone,
+        template_code="COMPLIANCE_REMINDER_V1",
+        language=lang,
+        payload={"supply_id": supply.id, "student": student.full_name, "link": link},
+        related_supply=supply,
+        status=MessageLog.Status.QUEUED,
+    )
+
+    prov = _provider()
+    msg_id, pstatus = prov.send_template(phone, TEMPLATE_NAME["COMPLIANCE_REMINDER_V1"], LANG_CODE[lang], components)
+    log.provider_msg_id = msg_id
+    log.status = MessageLog.Status.SENT if pstatus.lower() == "sent" else MessageLog.Status.QUEUED
+    log.sent_at = timezone.now()
+    log.save(update_fields=["provider_msg_id","status","sent_at","updated_at"])
+    return log

@@ -3,6 +3,7 @@ from .models import Enrollment
 from django.contrib import admin
 from django.utils import timezone
 from .models import Enrollment, MonthlySupply
+from .models import ComplianceSubmission
 
 @admin.register(Enrollment)
 class EnrollmentAdmin(admin.ModelAdmin):
@@ -22,3 +23,10 @@ class MonthlySupplyAdmin(admin.ModelAdmin):
     list_filter = ("enrollment__organization","delivered_on")
     search_fields = ("enrollment__student__first_name","enrollment__student__last_name","qr_token")
     actions = [_mark_delivered_today]
+
+@admin.register(ComplianceSubmission)
+class ComplianceSubmissionAdmin(admin.ModelAdmin):
+    list_display = ("monthly_supply","status","submitted_at")
+    list_filter = ("status","monthly_supply__enrollment__organization")
+    search_fields = ("monthly_supply__enrollment__student__first_name",
+                     "monthly_supply__enrollment__student__last_name")

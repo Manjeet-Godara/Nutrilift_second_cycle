@@ -149,6 +149,26 @@ class MonthlySupply(models.Model):
             ))
         MonthlySupply.objects.bulk_create(objs, ignore_conflicts=True)
 
+class ComplianceSubmission(models.Model):
+    class Status(models.TextChoices):
+        NOT_SUBMITTED = "NOT_SUBMITTED", "Not submitted"
+        COMPLIANT = "COMPLIANT", "Submitted & compliant"
+        UNABLE = "UNABLE", "Submitted & unable"
+
+    monthly_supply = models.OneToOneField(MonthlySupply, on_delete=models.CASCADE, related_name="compliance")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.NOT_SUBMITTED)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    responses = models.JSONField(default=dict, blank=True)
+
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["status", "created_at"])]
+
+    def __str__(self):
+        return f"{self.monthly_supply} → {self.status}"
+
 
 # Optional: also generate supplies when someone creates an Enrollment directly (safety net)
 @receiver(post_save, sender=Enrollment)

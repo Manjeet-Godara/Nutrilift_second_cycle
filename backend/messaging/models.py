@@ -25,8 +25,10 @@ class MessageLog(models.Model):
     error_title = models.CharField(max_length=255, blank=True)
 
     # linkage to operational event
-    related_screening = models.ForeignKey(Screening, on_delete=models.SET_NULL, null=True, blank=True, related_name="messages")
-
+    #related_screening = models.ForeignKey(Screening, on_delete=models.SET_NULL, null=True, blank=True, related_name="messages")
+    related_screening = models.ForeignKey("screening.Screening", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    related_supply = models.ForeignKey("program.MonthlySupply", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")  # NEW
+    
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
