@@ -14,12 +14,26 @@ class UserAdmin(admin.ModelAdmin):
     )
     add_fieldsets = ((None, {"classes": ("wide",), "fields": ("email", "password1", "password2")}),)
 
+# @admin.register(Organization)
+# class OrganizationAdmin(admin.ModelAdmin):
+#     list_display = ("name", "org_type", "city", "state", "country", "is_active")
+#     search_fields = ("name", "city", "state", "country")
+#     list_filter = ("org_type", "is_active")
+
+# @admin.register(OrgMembership)
+# class OrgMembershipAdmin(admin.ModelAdmin):
+#     list_display = ("user", "organization", "role", "is_active", "created_at","assistance_suspended")
+#     list_filter = ("role", "is_active", "organization__org_type","assistance_suspended")
+#     search_fields = ("user__email", "organization__name")
+
 @admin.register(Organization)
 class OrganizationAdmin(admin.ModelAdmin):
-    list_display = ("name", "org_type", "city", "state", "country", "is_active")
+    list_display = ("name", "org_type", "city", "state", "country",
+                    "is_active", "assistance_suspended")
+    list_filter = ("org_type", "is_active", "assistance_suspended")
     search_fields = ("name", "city", "state", "country")
-    list_filter = ("org_type", "is_active")
 
+# --- Option 1: simplest (no org suspension on this list) ---
 @admin.register(OrgMembership)
 class OrgMembershipAdmin(admin.ModelAdmin):
     list_display = ("user", "organization", "role", "is_active", "created_at")

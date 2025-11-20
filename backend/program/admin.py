@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.utils import timezone
 from .models import Enrollment, MonthlySupply
 from .models import ComplianceSubmission
+from .models import ScreeningMilestone
 
 @admin.register(Enrollment)
 class EnrollmentAdmin(admin.ModelAdmin):
@@ -30,3 +31,9 @@ class ComplianceSubmissionAdmin(admin.ModelAdmin):
     list_filter = ("status","monthly_supply__enrollment__organization")
     search_fields = ("monthly_supply__enrollment__student__first_name",
                      "monthly_supply__enrollment__student__last_name")
+
+@admin.register(ScreeningMilestone)
+class ScreeningMilestoneAdmin(admin.ModelAdmin):
+    list_display = ("enrollment","milestone","status","due_on","completed_at")
+    list_filter = ("status","milestone","enrollment__organization")
+    search_fields = ("enrollment__student__first_name","enrollment__student__last_name")

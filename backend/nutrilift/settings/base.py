@@ -101,4 +101,8 @@ CELERY_BEAT_SCHEDULE = {
         "task": "program.tasks.send_compliance_due_reminders",
         "schedule": crontab(minute="*/15"),
     },
+    "milestones-overdue-and-enforcement-daily": {
+        "task": "program.tasks.update_milestones_and_enforcement",
+        "schedule": crontab(hour=2, minute=15),
+    },
 }

@@ -4,4 +4,4 @@ class ProgramConfig(AppConfig):
     name = "program"
     def ready(self):
         # Import signals so Django registers the receivers at startup
-        import program.signals  # noqa: F401 
+        from . import signals  # noqa 

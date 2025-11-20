@@ -12,7 +12,7 @@ from django.utils import timezone
 from accounts.models import Organization, User
 from assist.models import Application
 from roster.models import Student
-
+from screening.models import Screening
 
 def _mint_token(nbytes: int = 24) -> str:
     # url-safe, ~32 chars for 24 bytes
@@ -66,13 +66,9 @@ class Enrollment(models.Model):
         return f"{self.student.full_name} ({self.status})"
 
     @staticmethod
-    def create_for_approved(app: Application, approved_by: Optional[User]):
-        """
-        Called in Sprint 4 when SAPA approves an application.
-        Now also generates six MonthlySupply rows (1..6) with QR tokens.
-        """
+    def create_for_approved(app: Application, approved_by: User | None):
         start = timezone.now().date()
-        end = start + timedelta(days=180)   # approx 6 months
+        end = start + timedelta(days=180)
         with transaction.atomic():
             e = Enrollment.objects.create(
                 organization=app.organization,
@@ -84,6 +80,7 @@ class Enrollment(models.Model):
                 approved_by=approved_by,
             )
             MonthlySupply.bootstrap_for_enrollment(e)
+            ScreeningMilestone.bootstrap_for_enrollment(e)  # NEW
         return e
 
 
@@ -171,7 +168,73 @@ class ComplianceSubmission(models.Model):
 
 
 # Optional: also generate supplies when someone creates an Enrollment directly (safety net)
+# @receiver(post_save, sender=Enrollment)
+# def _auto_generate_supplies(sender, instance: Enrollment, created: bool, **kwargs):
+#     if created:
+#         MonthlySupply.bootstrap_for_enrollment(instance)
 @receiver(post_save, sender=Enrollment)
-def _auto_generate_supplies(sender, instance: Enrollment, created: bool, **kwargs):
+def _auto_generate_supplies_and_milestones(sender, instance: Enrollment, created: bool, **kwargs):
     if created:
         MonthlySupply.bootstrap_for_enrollment(instance)
+        ScreeningMilestone.bootstrap_for_enrollment(instance)  # NEW
+
+class ScreeningMilestone(models.Model):
+    class Milestone(models.TextChoices):
+        MONTH_3 = "MONTH_3", "3-month"
+        MONTH_6 = "MONTH_6", "6-month"
+
+    class Status(models.TextChoices):
+        DUE = "DUE", "Due"
+        COMPLETED = "COMPLETED", "Completed"
+        OVERDUE = "OVERDUE", "Overdue"
+
+    enrollment = models.ForeignKey("program.Enrollment", on_delete=models.CASCADE, related_name="milestones")
+    milestone = models.CharField(max_length=16, choices=Milestone.choices)
+    due_on = models.DateField()
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DUE)
+
+    completed_screening = models.ForeignKey("screening.Screening", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("enrollment","milestone"),)
+        indexes = [
+            models.Index(fields=["status","due_on"]),
+            models.Index(fields=["enrollment","milestone"]),
+        ]
+
+    def __str__(self):
+        return f"{self.enrollment.student.full_name} – {self.milestone} – {self.status}"
+
+    @staticmethod
+    def bootstrap_for_enrollment(e: "Enrollment"):
+        """
+        Create 3‑month (+~90d) and 6‑month (+~180d) milestones if missing.
+        """
+        existing = {m.milestone for m in e.milestones.all()}
+        rows = []
+        if "MONTH_3" not in existing:
+            rows.append(ScreeningMilestone(
+                enrollment=e,
+                milestone=ScreeningMilestone.Milestone.MONTH_3,
+                due_on=e.start_date + timedelta(days=90),
+            ))
+        if "MONTH_6" not in existing:
+            rows.append(ScreeningMilestone(
+                enrollment=e,
+                milestone=ScreeningMilestone.Milestone.MONTH_6,
+                due_on=e.start_date + timedelta(days=180),
+            ))
+        if rows:
+            ScreeningMilestone.objects.bulk_create(rows, ignore_conflicts=True)
+
+    def mark_completed(self, screening: Screening):
+        if self.status == self.Status.COMPLETED:
+            return
+        self.status = self.Status.COMPLETED
+        self.completed_screening = screening
+        self.completed_at = timezone.now()
+        self.save(update_fields=["status","completed_screening","completed_at","updated_at"])

@@ -38,7 +38,9 @@ class Organization(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
+    assistance_suspended = models.BooleanField(default=False)
+    assistance_suspended_at = models.DateTimeField(null=True, blank=True)
+    assistance_suspension_reason = models.CharField(max_length=255, blank=True)
     def __str__(self):
         return self.name
 

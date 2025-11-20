@@ -10,6 +10,7 @@ from roster.models import Student, Guardian
 from screening.models import Screening
 from .models import Application
 from .forms import ParentConsentForm
+import re
 
 # ---------- Public parent application (consent) ----------
 def assist_apply(request):
@@ -23,7 +24,9 @@ def assist_apply(request):
     except ValueError:
         return HttpResponseBadRequest("Invalid parameters.")
 
-    lang = (request.GET.get("lang") or "en").lower()
+    raw_lang = (request.GET.get("lang") or "").lower()
+    m = re.search(r'\b(en|hi|local)\b', raw_lang)   # keep only supported codes
+    lang = m.group(1) if m else "en"
     screening = get_object_or_404(Screening, pk=screening_id)
     student = get_object_or_404(Student, pk=student_id, organization=screening.organization)
 

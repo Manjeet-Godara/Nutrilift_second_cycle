@@ -5,7 +5,8 @@ from celery import shared_task
 from .models import MonthlySupply
 from messaging.models import MessageLog
 from messaging.services import send_compliance_reminder
-
+from .services import compute_overdue_milestones, evaluate_enforcement_for_all_orgs
+from accounts.models import Organization
 @shared_task
 def send_compliance_due_reminders():
     """
@@ -37,3 +38,8 @@ def send_compliance_due_reminders():
         if already:
             continue
         send_compliance_reminder(s)
+
+@shared_task
+def update_milestones_and_enforcement():
+    compute_overdue_milestones()
+    evaluate_enforcement_for_all_orgs()
