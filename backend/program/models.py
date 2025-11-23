@@ -14,6 +14,9 @@ from assist.models import Application
 from roster.models import Student
 from screening.models import Screening
 
+from datetime import date, timedelta
+from django.utils.dateparse import parse_date
+
 def _mint_token(nbytes: int = 24) -> str:
     # url-safe, ~32 chars for 24 bytes
     return secrets.token_urlsafe(nbytes)
@@ -82,7 +85,20 @@ class Enrollment(models.Model):
             MonthlySupply.bootstrap_for_enrollment(e)
             ScreeningMilestone.bootstrap_for_enrollment(e)  # NEW
         return e
-
+    #phase 11
+    def _normalize_dates(self):
+        # Coerce strings (e.g. "2024-01-01") to datetime.date
+        if isinstance(self.start_date, str):
+            parsed = parse_date(self.start_date)
+            if parsed is not None:
+                self.start_date = parsed
+        if isinstance(self.end_date, str):
+            parsed = parse_date(self.end_date)
+            if parsed is not None:
+                self.end_date = parsed
+    def save(self, *args, **kwargs):
+        self._normalize_dates()
+        return super().save(*args, **kwargs)
 
 class MonthlySupply(models.Model):
     """
@@ -128,23 +144,83 @@ class MonthlySupply(models.Model):
             self.compliance_due_at = _due_dt_for(self.delivered_on)
         super().save(*args, **kwargs)
 
+    # @staticmethod
+    # def bootstrap_for_enrollment(e: Enrollment):
+    #     """
+    #     Create supplies 1..6 if none exist.
+    #     scheduled_delivery_date is optional; set first month to start_date for convenience.
+    #     """
+    #     if e.supplies.exists():
+    #         return
+    #     objs = []
+    #     for i in range(1, 7):
+    #         objs.append(MonthlySupply(
+    #             enrollment=e,
+    #             month_index=i,
+    #             scheduled_delivery_date=e.start_date if i == 1 else None,
+    #             qr_token=_unique_qr_token()
+    #         ))
+    #     MonthlySupply.objects.bulk_create(objs, ignore_conflicts=True)
+
+    # @staticmethod
+    # def bootstrap_for_enrollment(e: "Enrollment"):
+    #     """
+    #     Create 3‑month (+~90d) and 6‑month (+~180d) milestones if missing.
+    #     """
+    #     existing = {m.milestone for m in e.milestones.all()}
+
+    #     # --- Normalize to date to avoid string + timedelta TypeError ---
+    #     start = e.start_date
+    #     if isinstance(start, str):
+    #         parsed = parse_date(start)
+    #         if parsed is not None:
+    #             start = parsed
+    #         else:
+    #             # as a fallback, load from DB which returns a proper date
+    #             e.refresh_from_db(fields=["start_date"])
+    #             start = e.start_date
+    #     # ----------------------------------------------------------------
+
+    #     rows = []
+    #     if "MONTH_3" not in existing:
+    #         rows.append(ScreeningMilestone(
+    #             enrollment=e,
+    #             milestone=ScreeningMilestone.Milestone.MONTH_3,
+    #             due_on=start + timedelta(days=90),
+    #         ))
+    #     if "MONTH_6" not in existing:
+    #         rows.append(ScreeningMilestone(
+    #             enrollment=e,
+    #             milestone=ScreeningMilestone.Milestone.MONTH_6,
+    #             due_on=start + timedelta(days=180),
+    #         ))
+
+    #     # (whatever you already do to persist `rows`, e.g., bulk_create)
     @staticmethod
-    def bootstrap_for_enrollment(e: Enrollment):
-        """
-        Create supplies 1..6 if none exist.
-        scheduled_delivery_date is optional; set first month to start_date for convenience.
-        """
-        if e.supplies.exists():
-            return
-        objs = []
-        for i in range(1, 7):
-            objs.append(MonthlySupply(
+    def bootstrap_for_enrollment(e: "Enrollment"):
+        existing = {m.milestone for m in e.milestones.all()}
+
+        # Normalize before math, in case anything else in the future sets strings
+        start = e.start_date
+        if isinstance(start, str):
+            start = parse_date(start)
+
+        rows = []
+        if "MONTH_3" not in existing:
+            rows.append(ScreeningMilestone(
                 enrollment=e,
-                month_index=i,
-                scheduled_delivery_date=e.start_date if i == 1 else None,
-                qr_token=_unique_qr_token()
+                milestone=ScreeningMilestone.Milestone.MONTH_3,
+                due_on=start + timedelta(days=90),
             ))
-        MonthlySupply.objects.bulk_create(objs, ignore_conflicts=True)
+        if "MONTH_6" not in existing:
+            rows.append(ScreeningMilestone(
+                enrollment=e,
+                milestone=ScreeningMilestone.Milestone.MONTH_6,
+                due_on=start + timedelta(days=180),
+            ))
+
+        if rows:
+            ScreeningMilestone.objects.bulk_create(rows)
 
 class ComplianceSubmission(models.Model):
     class Status(models.TextChoices):

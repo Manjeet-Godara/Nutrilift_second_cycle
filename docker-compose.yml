@@ -42,7 +42,10 @@ services:
     depends_on: [web, redis]
     volumes:
       - ./backend:/app/backend
-
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    
   beat:
     build:
       context: .
@@ -53,7 +56,9 @@ services:
     depends_on: [web, redis]
     volumes:
       - ./backend:/app/backend
-
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
 
 volumes:
   db_data:

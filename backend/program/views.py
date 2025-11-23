@@ -112,11 +112,22 @@ def mark_delivered_view(request, supply_id: int):
     if request.method != "POST":
         return HttpResponseBadRequest("POST required")
     
+    #commented for pytest fixing in phase 11
+
+    # org = ms.enrollment.organization
+    # if org.assistance_suspended:
+    #     return HttpResponseForbidden("School is suspended due to overdue screening milestones; please complete the required 3/6‑month screenings.")
+    
+    # ms = get_object_or_404(MonthlySupply, pk=supply_id)
+    #added for the pytest fixing
+    ms = get_object_or_404(MonthlySupply, pk=supply_id)
     org = ms.enrollment.organization
     if org.assistance_suspended:
-        return HttpResponseForbidden("School is suspended due to overdue screening milestones; please complete the required 3/6‑month screenings.")
-    
-    ms = get_object_or_404(MonthlySupply, pk=supply_id)
+        return HttpResponseForbidden(
+            "School is suspended due to overdue screening milestones; "
+            "please complete the required 3/6‑month screenings."
+        )
+        
     mark_supply_delivered(ms, delivered_on=None, actor=request.user)
     return redirect(f"/admin/program/monthlysupply/{ms.id}/change/")
 

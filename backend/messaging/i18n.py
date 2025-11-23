@@ -1,4 +1,21 @@
 import os
+from typing import Optional
+
+LANG_CODE = {
+    "en": os.getenv("MSG_LANG_EN", "en"),
+    "hi": os.getenv("MSG_LANG_HI", "hi"),
+    "local": os.getenv("MSG_LANG_LOCAL", os.getenv("MSG_LANG_EN", "en")),
+}
+
+def to_provider_lang(value: Optional[str]) -> str:
+    """Normalize arbitrary inputs like 'EN', 'en_US', 'hi-IN', 'local' → provider code."""
+    v = (value or "").lower()
+    if v.startswith("hi"):
+        return LANG_CODE["hi"]
+    if v == "local":
+        return LANG_CODE["local"]
+    # default and any 'en*' variant
+    return LANG_CODE["en"]
 
 FLAG_TEXT = {
     "en": {

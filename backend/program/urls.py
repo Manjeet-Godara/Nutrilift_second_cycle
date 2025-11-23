@@ -12,7 +12,7 @@ urlpatterns = [
     path("program/fulfillment/mark-delivered/<int:supply_id>/", mark_delivered_view, name="mark_delivered"),
     path("program/compliance/<str:token>", compliance_form, name="compliance_form"),
     path("program/compliance/<str:token>/thanks", compliance_success, name="compliance_success"),
-    path("program/fulfillment/mark-delivered/<int:supply_id>/", mark_delivered_view, name="mark_delivered"),
+    # path("program/fulfillment/mark-delivered/<int:supply_id>/", mark_delivered_view, name="mark_delivered"),
     path("program/milestones", milestones_dashboard, name="milestones_dashboard"), # ORG admin
     path("program/sapa/milestones", milestones_sapa_overview, name="milestones_sapa"), # SAPA admin
 ]

@@ -8,6 +8,7 @@ from accounts.decorators import require_roles
 from accounts.models import Role, Organization
 from .models import SchoolStatDaily, SchoolReportStatus
 from .services import period_summary, six_month_window_ending
+from django.contrib.auth.decorators import login_required
 
 def _six_months():
     end = timezone.now().date()
@@ -101,3 +102,10 @@ def inditech_export_school_csv(request, org_id: int):
     resp = HttpResponse(buff.getvalue(), content_type="text/csv")
     resp["Content-Disposition"] = f'attachment; filename="{org.name.replace(" ","_")}_{start}_{end}_summary.csv"'
     return resp
+
+@login_required
+def inditech_console(request):
+    # Teachers are regular users; only staff should see this console.
+    if not request.user.is_staff:
+        return HttpResponseForbidden("Forbidden")
+    return HttpResponse("Inditech Console")  # simple 200 for staff

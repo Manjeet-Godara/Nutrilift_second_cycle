@@ -28,6 +28,7 @@ urlpatterns = [
     path("", include("assist.urls")),
     path("", include("program.urls")),
     path("", include("reporting.urls")),
+    path("", include("ops.urls")),
 ]
 
 

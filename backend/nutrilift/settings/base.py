@@ -1,6 +1,11 @@
 import os
 from pathlib import Path
 from celery.schedules import crontab
+import json, sys
+
+#PHASE 11
+LOG_JSON = os.getenv("LOG_JSON", "1") == "1"
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -27,6 +32,7 @@ INSTALLED_APPS = [
     "assist",
     "program.apps.ProgramConfig",  # <- make sure it's this dotted path
     "reporting",   # NEW (Sprint 8)
+    "ops",               # NEW (observability + backups)
 ]
 
 MIDDLEWARE = [
@@ -39,6 +45,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # RBAC org scoping
     "accounts.middleware.CurrentOrganizationMiddleware",
+    #PHASE 11
+    "ops.middleware.RequestLogMiddleware",
 ]
 
 # Templates (needed for Django admin)
@@ -95,6 +103,10 @@ ADMIN_URL = os.getenv("ADMIN_URL", "admin")
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/1")
+
+# BROKER_HOST = os.getenv("BROKER_HOST", "localhost")  # override to 'redis' inside Docker
+# CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", f"redis://{BROKER_HOST}:6379/0")
+# CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", f"redis://{BROKER_HOST}:6379/1")
 CELERY_TIMEZONE = TIME_ZONE
 
 CELERY_BEAT_SCHEDULE = {
@@ -108,8 +120,6 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-
-
 CELERY_BEAT_SCHEDULE.update({
     "reporting-rollup-nightly": {
         "task": "reporting.tasks.build_daily_rollups",
@@ -118,5 +128,17 @@ CELERY_BEAT_SCHEDULE.update({
     "reporting-send-due-reports-daily": {
         "task": "reporting.tasks.send_due_school_reports",
         "schedule": crontab(hour=3, minute=5),   # 03:05 every day
+    },
+})
+
+#PHASE 11
+CELERY_BEAT_SCHEDULE.update({
+    "ops-beat-heartbeat-every-1m": {
+        "task": "ops.tasks.beat_heartbeat",
+        "schedule": crontab(minute="*/1")
+    },
+    "ops-nightly-backup": {
+        "task": "ops.tasks.nightly_backup",
+        "schedule": crontab(hour=2, minute=30)
     },
 })

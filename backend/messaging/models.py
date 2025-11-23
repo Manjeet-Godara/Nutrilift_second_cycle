@@ -2,8 +2,15 @@ from django.db import models
 from django.utils import timezone
 from accounts.models import Organization
 from screening.models import Screening
+import uuid
 
 class MessageLog(models.Model):
+    idempotency_key = models.CharField(
+        max_length=36,
+        unique=True,
+        default=uuid.uuid4,   # Django will str() the UUID
+        editable=False,
+    )
     class Status(models.TextChoices):
         QUEUED = "QUEUED", "Queued"
         SENT = "SENT", "Sent"
@@ -31,6 +38,9 @@ class MessageLog(models.Model):
     
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # idempotency_key = models.CharField(max_length=160, blank=True, db_index=True, unique=True)  # NEW
+    # tip: use a stable key per “one‑time” event (e.g., screening_id or supply_id + template)
+    
 
     class Meta:
         indexes = [
