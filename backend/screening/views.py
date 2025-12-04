@@ -20,6 +20,13 @@ from messaging.services import send_redflag_education, send_redflag_assistance
 from roster.models import Guardian
 from .models import Screening 
 
+# near top with other imports
+from django.db import transaction, IntegrityError
+from django.shortcuts import render
+from .forms import AddStudentForm  # add AddStudentForm
+import json  
+from django.core.exceptions import ValidationError
+
 def _org_required(request):
     return getattr(request, "org", None) is not None
 
@@ -171,3 +178,144 @@ def send_assistance(request, screening_id):
     log = send_redflag_assistance(s)
     messages.success(request, f"Assistance message queued → status {log.status}.")
     return redirect("screening_result", screening_id=s.id)
+
+# Add somewhere near other helpers in this file
+def _generate_student_code(org) -> str:
+    """
+    Generate a short numeric code unique within the organization.
+    Keep it simple; retry a few times on collision.
+    """
+    import random
+    for _ in range(15):
+        code = "".join(random.choices("0123456789", k=6))
+        if not Student.objects.filter(organization=org, student_code=code).exists():
+            return code
+    # Fallback – extremely unlikely to be needed
+    raise ValueError("Could not generate a unique student code. Please enter one manually.")
+
+@require_roles(Role.TEACHER, Role.ORG_ADMIN, allow_superuser=True)
+def teacher_add_student(request):
+    # Ensure org context is present
+    if not getattr(request, "org", None):
+        return HttpResponseForbidden("Organization context required.")
+    org = request.org
+
+    # Pre-select from classroom filter, if present
+    initial = {}
+    selected_classroom_id = request.GET.get("classroom")
+    if selected_classroom_id:
+        c = Classroom.objects.filter(id=selected_classroom_id, organization=org).first()
+        if c:
+            initial["grade"] = c.grade
+            initial["division"] = c.division
+
+    # Build divisions-by-grade mapping for the template's client-side filtering
+    divisions_by_grade = {}
+    for g, d in Classroom.objects.filter(organization=org).values_list("grade", "division"):
+        divisions_by_grade.setdefault(g, [])
+        if d not in divisions_by_grade[g]:
+            divisions_by_grade[g].append(d or "")
+
+    if request.method == "POST":
+        student_form = AddStudentForm(request.POST, organization=org, initial=initial)
+        screening_form = ScreeningForm(request.POST, student=None)
+
+        valid = student_form.is_valid() & screening_form.is_valid()
+        # For new students we require parent phone to bind a guardian
+        if valid and not screening_form.cleaned_data.get("parent_phone_e164"):
+            screening_form.add_error("parent_phone_e164", "Parent WhatsApp number is required for a new student.")
+            valid = False
+
+        if valid:
+            try:
+                with transaction.atomic():
+                    # Resolve classroom – do NOT create new classrooms here
+                    grade = student_form.cleaned_data["grade"]
+                    division = student_form.cleaned_data["division"] or ""
+                    classroom = Classroom.objects.filter(organization=org, grade=grade, division=division).first()
+                    if not classroom:
+                        student_form.add_error(None, "Selected Grade/Division does not exist.")
+                        raise ValidationError("Classroom missing")
+
+                    # Guardian (by phone only), opt-in always True, default name 'Parent'
+                    phone = screening_form.cleaned_data["parent_phone_e164"]
+                    guardian, _ = Guardian.objects.get_or_create(
+                        organization=org, phone_e164=phone,
+                        defaults={"full_name": "Parent", "whatsapp_opt_in": True}
+                    )
+                    if not guardian.whatsapp_opt_in:
+                        guardian.whatsapp_opt_in = True
+                        guardian.save(update_fields=["whatsapp_opt_in"])
+
+                    # Student code: always auto-generate
+                    code = _generate_student_code(org)
+
+                    # Create student (gender comes from screening snapshot)
+                    student = Student.objects.create(
+                        organization=org,
+                        classroom=classroom,
+                        first_name=student_form.cleaned_data["first_name"].strip(),
+                        last_name=(student_form.cleaned_data.get("last_name") or "").strip(),
+                        gender=screening_form.cleaned_data["gender"],
+                        dob=student_form.cleaned_data.get("dob"),
+                        is_low_income=student_form.cleaned_data.get("is_low_income", False),
+                        student_code=code,
+                        primary_guardian=guardian,
+                    )
+
+                    # Create screening (same logic as screening_create)
+                    s = Screening(
+                        organization=org,
+                        student=student,
+                        teacher=request.user,
+                        screened_at=timezone.now(),
+                        height_cm=screening_form.cleaned_data["height_cm"],
+                        weight_kg=screening_form.cleaned_data["weight_kg"],
+                        age_years=screening_form.cleaned_data["age_years"],
+                        gender=screening_form.cleaned_data["gender"],
+                        answers=screening_form.cleaned_data["answers"],
+                        is_low_income_at_screen=screening_form.cleaned_data["is_low_income_at_screen"],
+                    )
+
+                    rr = compute_risk(
+                        age_years=s.age_years,
+                        gender=s.gender,
+                        height_cm=float(s.height_cm) if s.height_cm else None,
+                        weight_kg=float(s.weight_kg) if s.weight_kg else None,
+                        answers=s.answers or {},
+                    )
+                    s.risk_level = rr.level
+                    s.red_flags = rr.red_flags
+                    s.save()
+
+                messages.success(request, f"Student “{student.full_name}” created and screening completed.")
+                audit_log(
+                    request.user, org,
+                    action="teacher_add_student_and_screen",
+                    target=student,
+                    payload={"guardian_id": guardian.id, "screening_id": s.id, "risk": s.risk_level},
+                    request=request
+                )
+                return redirect("screening_result", screening_id=s.id)
+
+            except (IntegrityError, ValidationError, ValueError) as e:
+                messages.error(request, f"Could not complete: {e}")
+
+    else:
+        student_form = AddStudentForm(organization=org, initial=initial)
+        screening_form = ScreeningForm(student=None)
+
+    # For rendering MCQs nicely like screening_form.html
+    mcq_fields = [screening_form[field_key] for field_key, _ in MCQ_FIELDS]
+
+    return render(
+        request,
+        "screening/add_student.html",
+        {
+            "form": student_form,  # legacy var (unused by the new template, but safe)
+            "student_form": student_form,
+            "screening_form": screening_form,
+            "mcq_fields": mcq_fields,
+            "divisions_by_grade": json.dumps(divisions_by_grade),
+        },
+    )
