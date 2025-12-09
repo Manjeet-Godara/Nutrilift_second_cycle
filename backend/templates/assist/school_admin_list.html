@@ -13,10 +13,13 @@
     .btn{display:inline-block;padding:.35rem .7rem;border:1px solid #d1d5db;border-radius:6px;text-decoration:none}
     .btn-primary{background:#2563eb;border-color:#2563eb;color:#fff}
   </style>
+  
 </head>
 <body>
   <h2>{{ org.name }} – Assistance Applications</h2>
-
+  <a href="{% url 'assist:assist_applications' %}"
+   class="btn btn-primary"
+   style="margin: 0 0 1rem 0;">Applications</a>
     <form method="get" action="" class="row" style="margin:.5rem 0 1rem 0">
         <label><strong>Filter</strong>&nbsp;
           <select name="period" onchange="this.form.submit()">
@@ -44,46 +47,5 @@
       </div>
       <p style="color:#6b7280;margin:.25rem 0 1rem 0">Filter applies to all tiles above except “Total students”.</p>
 
-  <form method="get" action="">
-    <label>Filter by status:
-      <select name="status" onchange="this.form.submit()">
-        <option value="APPLIED" {% if status == 'APPLIED' %}selected{% endif %}>Applied</option>
-        <option value="FORWARDED" {% if status == 'FORWARDED' %}selected{% endif %}>Forwarded</option>
-      </select>
-    </label>
-  </form>
-
-  {% if status == 'APPLIED' and counts.APPLIED %}
-    <form method="post" action="{% url 'assist:forward_all' %}">{% csrf_token %}
-      <button class="btn btn-primary" type="submit">Forward All Pending to SAPA</button>
-    </form>
-  {% endif %}
-
-  <table style="margin-top:1rem">
-    <thead>
-      <tr>
-        <th>Applied At</th><th>Student</th><th>Parent Phone</th><th>Status</th><th>Action</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for a in applications %}
-        <tr>
-          <td>{{ a.applied_at|date:"Y-m-d H:i" }}</td>
-          <td>{{ a.student.full_name }}</td>
-          <td>{% if a.guardian %}{{ a.guardian.phone_e164 }}{% endif %}</td>
-          <td>{{ a.status }}</td>
-          <td>
-            {% if a.status == 'APPLIED' %}
-              <form method="post" action="{% url 'assist:forward_one' a.id %}">{% csrf_token %}
-                <button class="btn" type="submit">Forward</button>
-              </form>
-            {% else %}-{% endif %}
-          </td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="5">No applications</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
 </body>
 </html>

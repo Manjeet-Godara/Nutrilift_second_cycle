@@ -110,6 +110,7 @@ def _period_bounds(key: str):
 # backend/assist/views.py (replace the function body of school_app_dashboard)
 @require_roles(Role.ORG_ADMIN, allow_superuser=True)
 def school_app_dashboard(request):
+
     org = request.org
     if not org:
         return HttpResponseForbidden("Organization context required.")
@@ -241,3 +242,36 @@ def forward_one(request, app_id):
     app.save(update_fields=["status","forwarded_at","forwarded_by","updated_at"])
     audit_log(request.user, org, "APPLICATION_FORWARDED", target=app)
     return redirect(reverse("assist:school_app_dashboard") + "?status=APPLIED")
+
+def school_applications(request):
+    org = getattr(request, "org", None)  # how you currently get org
+    if not org:
+        # keep whatever you currently do when org is missing
+        pass
+
+    status = request.GET.get("status", "APPLIED")
+
+    # This block copies the listing logic you currently use on /assist/admin:
+    app_qs = Application.objects.filter(organization=org)
+    counts = {
+        "APPLIED": app_qs.filter(status=Application.Status.APPLIED).count(),
+        "FORWARDED": app_qs.filter(status=Application.Status.FORWARDED).count(),
+    }
+    if status in ("APPLIED", "FORWARDED"):
+        app_qs = app_qs.filter(status=status)
+
+    applications = (
+        app_qs.select_related("student", "guardian")
+             .order_by("-applied_at")[:500]
+    )
+
+    return render(
+        request,
+        "assist/applications_list.html",
+        {
+            "org": org,
+            "applications": applications,
+            "counts": counts,
+            "status": status,
+        },
+    )
