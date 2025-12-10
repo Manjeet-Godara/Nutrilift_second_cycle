@@ -284,7 +284,9 @@ def school_app_dashboard(request):
     org = request.org
     if not org:
         return HttpResponseForbidden("Organization context required.")
-
+    teacher_link = request.build_absolute_uri(
+        reverse("teacher_portal_token", args=[org.screening_link_token])
+    )
     # Existing table filter by status (unchanged)
     q_status = request.GET.get("status", "APPLIED")
     app_qs = Application.objects.filter(organization=org)
@@ -368,6 +370,7 @@ def school_app_dashboard(request):
     }
 
     return render(request, "assist/school_admin_list.html", {
+        "teacher_link": teacher_link,
         "org": org,
         "applications": applications,
         "counts": counts,   # keep existing keys to avoid breaking template conditionals

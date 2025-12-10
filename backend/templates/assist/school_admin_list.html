@@ -3,6 +3,15 @@
 <head>
   <meta charset="utf-8">
   <title>Applications – {{ org.name }}</title>
+  <div style="border:1px solid #e5e7eb;border-radius:8px;padding:1rem;margin:1rem 0">
+    <strong>Teacher screening link</strong>
+    <div style="display:flex;gap:.5rem;align-items:center;margin-top:.5rem">
+      <input type="text" readonly value="{{ teacher_link }}" style="flex:1;padding:.5rem;border:1px solid #d1d5db;border-radius:6px" onclick="this.select()">
+      <a class="btn" href="{{ teacher_link }}" target="_blank" rel="noopener">Open</a>
+      <button class="btn" type="button" onclick="navigator.clipboard.writeText('{{ teacher_link }}')">Copy</button>
+    </div>
+    <p style="color:#6b7280;margin:.5rem 0 0 0">Unique per organization. Share this with teachers (they must be logged in and have the Teacher role).</p>
+  </div>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     body{font-family:system-ui;max-width:1000px;margin:0 auto;padding:1rem;}

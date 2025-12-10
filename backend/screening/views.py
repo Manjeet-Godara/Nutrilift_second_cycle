@@ -28,6 +28,35 @@ import json
 from django.core.exceptions import ValidationError
 from messaging.ratelimit import RateLimitExceeded
 from messaging.models import MessageLog
+from django.contrib.auth.decorators import login_required
+from accounts.models import Organization, OrgMembership, Role
+
+from django.shortcuts import get_object_or_404, redirect
+from accounts.models import Organization, OrgMembership
+from .decorators import require_teacher_or_public
+
+def teacher_portal_token(request, token: str):
+    """
+    PUBLIC entry point. Resolves org by token, starts a 'public teacher' session for that org,
+    and then shows the regular teacher portal (now guarded by require_teacher_or_public).
+    """
+    org = get_object_or_404(Organization, screening_link_token=token)
+
+    # Start public teacher session for this org
+    request.session["public_teacher_org_id"] = org.id
+
+    # For immediate rendering convenience
+    request.org = org
+
+    # If the visitor happens to be logged in and a member, keep membership around for downstream use
+    if request.user.is_authenticated:
+        request.membership = OrgMembership.objects.filter(
+            user=request.user, organization=org, is_active=True
+        ).first()
+
+    # Render the teacher portal using the same function used by authenticated teachers
+    return teacher_portal(request)
+
 
 def _org_required(request):
     return getattr(request, "org", None) is not None
@@ -66,7 +95,8 @@ def _auto_send_for_screening(request, s: Screening):
         messages.error(request, f"Auto-send failed: {e}")
         return None
 
-@require_roles(Role.TEACHER, Role.ORG_ADMIN, allow_superuser=True)
+#@require_roles(Role.TEACHER, Role.ORG_ADMIN, allow_superuser=True)
+@require_teacher_or_public
 def teacher_portal(request):
     if not _org_required(request):
         return HttpResponseForbidden("Organization context required.")
@@ -94,9 +124,11 @@ def teacher_portal(request):
         "selected_classroom": int(classroom_id) if classroom_id else None,
         "selected_risk": risk or "",
         "q": q,
+        "teacher_token": request.org.screening_link_token,
     })
 
-@require_roles(Role.TEACHER, Role.ORG_ADMIN, allow_superuser=True)
+#@require_roles(Role.TEACHER, Role.ORG_ADMIN, allow_superuser=True)
+@require_teacher_or_public
 def screening_create(request, student_id):
     if not _org_required(request):
         return HttpResponseForbidden("Organization context required.")
@@ -165,7 +197,8 @@ def screening_create(request, student_id):
         )
     return render(request, "screening/screening_form.html", {"student": student, "form": form, "MCQ_FIELDS": MCQ_FIELDS})
 
-@require_roles(Role.TEACHER, Role.ORG_ADMIN, allow_superuser=True)
+#@require_roles(Role.TEACHER, Role.ORG_ADMIN, allow_superuser=True)
+@require_teacher_or_public
 def screening_result(request, screening_id):
     if not _org_required(request):
         return HttpResponseForbidden("Organization context required.")
@@ -179,7 +212,8 @@ def screening_result(request, screening_id):
 
 
 
-@require_roles(Role.TEACHER, Role.ORG_ADMIN, allow_superuser=True)
+#@require_roles(Role.TEACHER, Role.ORG_ADMIN, allow_superuser=True)
+@require_teacher_or_public
 def send_education(request, screening_id):
     s = get_object_or_404(Screening, pk=screening_id, organization=request.org)
     # basic guards
@@ -190,7 +224,8 @@ def send_education(request, screening_id):
     messages.success(request, f"Education message queued → status {log.status}.")
     return redirect("screening_result", screening_id=s.id)
 
-@require_roles(Role.TEACHER, Role.ORG_ADMIN, allow_superuser=True)
+#@require_roles(Role.TEACHER, Role.ORG_ADMIN, allow_superuser=True)
+@require_teacher_or_public
 def send_assistance(request, screening_id):
     s = get_object_or_404(Screening, pk=screening_id, organization=request.org)
     if not s.is_low_income_at_screen and not s.student.is_low_income:
@@ -217,8 +252,9 @@ def _generate_student_code(org) -> str:
     # Fallback – extremely unlikely to be needed
     raise ValueError("Could not generate a unique student code. Please enter one manually.")
 
-@require_roles(Role.TEACHER, Role.ORG_ADMIN, allow_superuser=True)
-def teacher_add_student(request):
+#@require_roles(Role.TEACHER, Role.ORG_ADMIN, allow_superuser=True)
+@require_teacher_or_public
+def teacher_add_student(request,token=None):
     # Ensure org context is present
     if not getattr(request, "org", None):
         return HttpResponseForbidden("Organization context required.")
