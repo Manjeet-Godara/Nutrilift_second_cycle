@@ -34,7 +34,11 @@ from accounts.models import Organization, OrgMembership, Role
 from django.shortcuts import get_object_or_404, redirect
 from accounts.models import Organization, OrgMembership
 from .decorators import require_teacher_or_public
-
+from messaging.services import (
+    send_redflag_education, send_redflag_assistance,  # keep for other flows
+    prepare_redflag_education_click_to_chat,
+    prepare_redflag_assistance_click_to_chat,
+)
 def teacher_portal_token(request, token: str):
     """
     PUBLIC entry point. Resolves org by token, starts a 'public teacher' session for that org,
@@ -63,9 +67,8 @@ def _org_required(request):
 
 def _auto_send_for_screening(request, s: Screening):
     """
-    Decide and send the correct WhatsApp message automatically
-    after a screening is created. Uses the guardian's WhatsApp
-    number on the Student record.
+    Decide and PREPARE (do NOT auto-send) the correct WhatsApp message
+    after a screening is created. Returns the MessageLog to open Click-to-Chat.
     """
     guardian = getattr(s.student, "primary_guardian", None)
     phone = getattr(guardian, "phone_e164", "") if guardian else ""
@@ -78,14 +81,14 @@ def _auto_send_for_screening(request, s: Screening):
     low_income = bool(s.is_low_income_at_screen)
     try:
         if s.risk_level == Screening.RiskLevel.RED and low_income:
-            log = send_redflag_assistance(s)
-            messages.success(request, "Assistance invitation queued for the parent.")
-            audit_log(request.user, request.org, "AUTO_SEND_ASSISTANCE",
+            log, _text = prepare_redflag_assistance_click_to_chat(s)
+            messages.success(request, "Assistance message prepared — open WhatsApp to send.")
+            audit_log(request.user, request.org, "AUTO_PREP_ASSISTANCE",
                       target=s, payload={"message_id": log.id}, request=request)
         else:
-            log = send_redflag_education(s)
-            messages.success(request, "Education message queued for the parent.")
-            audit_log(request.user, request.org, "AUTO_SEND_EDUCATION",
+            log, _text = prepare_redflag_education_click_to_chat(s)
+            messages.success(request, "Education message prepared — open WhatsApp to send.")
+            audit_log(request.user, request.org, "AUTO_PREP_EDUCATION",
                       target=s, payload={"message_id": log.id}, request=request)
         return log
     except RateLimitExceeded as e:
@@ -174,11 +177,14 @@ def screening_create(request, student_id):
                     student.primary_guardian = guardian
                     student.save(update_fields=["primary_guardian"])
             
-            _auto_send_for_screening(request, s)
+            log = _auto_send_for_screening(request, s)
 
             audit_log(request.user, org, "SCREENING_CREATED", target=s, payload={"risk": s.risk_level})
-
-            return redirect(reverse("screening_result", args=[s.id])) 
+            if log:
+                preview = reverse("whatsapp_preview", args=[log.id])
+                preview += f"?next={reverse('screening_result', args=[s.id])}"
+                return redirect(preview)
+            return redirect(reverse("screening_result", args=[s.id]))
         else:
             # ------- re-render with field errors -------
             mcq_fields = [form[field_key] for field_key, _ in MCQ_FIELDS]
@@ -220,9 +226,9 @@ def send_education(request, screening_id):
     if not s.student.primary_guardian or not s.student.primary_guardian.phone_e164:
         messages.error(request, "Parent WhatsApp number missing.")
         return redirect("screening_result", screening_id=s.id)
-    log = send_redflag_education(s)
-    messages.success(request, f"Education message queued → status {log.status}.")
-    return redirect("screening_result", screening_id=s.id)
+    log, _text = prepare_redflag_education_click_to_chat(s)
+    preview = reverse("whatsapp_preview", args=[log.id]) + f"?next={reverse('screening_result', args=[s.id])}"
+    return redirect(preview)
 
 #@require_roles(Role.TEACHER, Role.ORG_ADMIN, allow_superuser=True)
 @require_teacher_or_public
@@ -234,9 +240,9 @@ def send_assistance(request, screening_id):
     if not s.student.primary_guardian or not s.student.primary_guardian.phone_e164:
         messages.error(request, "Parent WhatsApp number missing.")
         return redirect("screening_result", screening_id=s.id)
-    log = send_redflag_assistance(s)
-    messages.success(request, f"Assistance message queued → status {log.status}.")
-    return redirect("screening_result", screening_id=s.id)
+    log, _text = prepare_redflag_assistance_click_to_chat(s)
+    preview = reverse("whatsapp_preview", args=[log.id]) + f"?next={reverse('screening_result', args=[s.id])}"
+    return redirect(preview)
 
 # Add somewhere near other helpers in this file
 def _generate_student_code(org) -> str:
@@ -348,7 +354,7 @@ def teacher_add_student(request,token=None):
                     s.red_flags = rr.red_flags
                     s.save()
 
-                _auto_send_for_screening(request, s)
+                log = _auto_send_for_screening(request, s)
 
                 messages.success(request, f"Student “{student.full_name}” created and screening completed.")
                 audit_log(
@@ -358,6 +364,9 @@ def teacher_add_student(request,token=None):
                     payload={"guardian_id": guardian.id, "screening_id": s.id, "risk": s.risk_level},
                     request=request
                 )
+                if log:
+                    preview = reverse("whatsapp_preview", args=[log.id]) + f"?next={reverse('screening_result', args=[s.id])}"
+                    return redirect(preview)
                 return redirect("screening_result", screening_id=s.id)
 
             except (IntegrityError, ValidationError, ValueError) as e:
