@@ -228,6 +228,9 @@ def assist_apply(request):
                     organization=screening.organization,
                     student=student,
                     guardian=g,
+                    trigger_screening=screening,
+                    low_income_declared=bool(getattr(screening, "is_low_income_at_screen", False)),
+                    income_verification_status=Application.IncomeVerificationStatus.PENDING,
                     source=Application.Source.PARENT,
                     status=Application.Status.APPLIED,
                     form_lang=lang,
@@ -381,6 +384,66 @@ def school_app_dashboard(request):
 
 
 @require_roles(Role.ORG_ADMIN, allow_superuser=True)
+def verify_income(request, app_id: int):
+    """School admin marks a parent application as low-income verified.
+
+    This is a precondition to forwarding the application to SAPA.
+    """
+    if request.method != "POST":
+        return HttpResponseBadRequest("POST required.")
+    org = request.org
+    if not org:
+        return HttpResponseForbidden("Organization context required.")
+    app = get_object_or_404(Application, pk=app_id, organization=org, status=Application.Status.APPLIED)
+    notes = (request.POST.get("notes") or "").strip()
+    app.low_income_declared = True
+    app.income_verification_status = Application.IncomeVerificationStatus.VERIFIED
+    app.income_verified_at = timezone.now()
+    app.income_verified_by = request.user
+    if notes:
+        app.income_verification_notes = notes
+    app.save(update_fields=[
+        "low_income_declared",
+        "income_verification_status",
+        "income_verified_at",
+        "income_verified_by",
+        "income_verification_notes",
+        "updated_at",
+    ])
+    audit_log(request.user, org, "APPLICATION_INCOME_VERIFIED", target=app, payload={"notes": notes} if notes else None)
+    return redirect(reverse("assist:school_app_dashboard") + "?status=APPLIED")
+
+
+@require_roles(Role.ORG_ADMIN, allow_superuser=True)
+def reject_income(request, app_id: int):
+    """School admin rejects the application as not eligible for low-income assistance."""
+    if request.method != "POST":
+        return HttpResponseBadRequest("POST required.")
+    org = request.org
+    if not org:
+        return HttpResponseForbidden("Organization context required.")
+    app = get_object_or_404(Application, pk=app_id, organization=org, status=Application.Status.APPLIED)
+    notes = (request.POST.get("notes") or "").strip()
+    app.income_verification_status = Application.IncomeVerificationStatus.REJECTED
+    app.income_verified_at = timezone.now()
+    app.income_verified_by = request.user
+    if notes:
+        app.income_verification_notes = notes
+    # Treat as rejected at the school level (keeps it out of SAPA queue)
+    app.status = Application.Status.REJECTED
+    app.save(update_fields=[
+        "status",
+        "income_verification_status",
+        "income_verified_at",
+        "income_verified_by",
+        "income_verification_notes",
+        "updated_at",
+    ])
+    audit_log(request.user, org, "APPLICATION_INCOME_REJECTED", target=app, payload={"notes": notes} if notes else None)
+    return redirect(reverse("assist:school_app_dashboard") + "?status=APPLIED")
+
+
+@require_roles(Role.ORG_ADMIN, allow_superuser=True)
 def forward_all(request):
     if request.method != "POST":
         return HttpResponseBadRequest("POST required.")
@@ -388,7 +451,13 @@ def forward_all(request):
     if not org:
         return HttpResponseForbidden("Organization context required.")
 
-    pending = Application.objects.filter(organization=org, status=Application.Status.APPLIED)
+    # Only forward applications that are declared low-income and verified by the school.
+    pending = Application.objects.filter(
+        organization=org,
+        status=Application.Status.APPLIED,
+        low_income_declared=True,
+        income_verification_status=Application.IncomeVerificationStatus.VERIFIED,
+    )
     updated = 0
     for app in pending.iterator():
         app.status = Application.Status.FORWARDED
@@ -408,7 +477,14 @@ def forward_one(request, app_id):
     org = request.org
     if not org:
         return HttpResponseForbidden("Organization context required.")
-    app = get_object_or_404(Application, pk=app_id, organization=org, status=Application.Status.APPLIED)
+    app = get_object_or_404(
+        Application,
+        pk=app_id,
+        organization=org,
+        status=Application.Status.APPLIED,
+        low_income_declared=True,
+        income_verification_status=Application.IncomeVerificationStatus.VERIFIED,
+    )
     app.status = Application.Status.FORWARDED
     app.forwarded_at = timezone.now()
     app.forwarded_by = request.user

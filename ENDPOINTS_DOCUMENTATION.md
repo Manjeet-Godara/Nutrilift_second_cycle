@@ -23,15 +23,25 @@ Complete list of all URL endpoints in the Nutrilift project with descriptions.
 
 ## Screening Module (`/screening/`)
 
+### `/screening/teacher/<token>/`
+**Method:** GET  
+**Authentication:** Public (token-based, no login required)  
+**Description:** Public teacher portal entry point using organization screening link token. Resolves organization by token, starts a public teacher session, and displays the teacher portal dashboard. Token format: `<org-slug>-<8-char-random>`.
+
 ### `/screening/teacher/`
 **Method:** GET  
 **Authentication:** Requires TEACHER, ORG_ADMIN role, or superuser  
 **Description:** Teacher portal dashboard showing list of students with filtering by classroom, risk level (GREEN/AMBER/RED), and search functionality. Displays students with their last screening risk level.
 
+### `/screening/teacher/<token>/add-student/`
+**Method:** GET, POST  
+**Authentication:** Public (token-based, no login required)  
+**Description:** Public token-based form to add a new student and create their initial screening. Uses organization token to identify the school. Auto-generates student code, creates guardian if needed, and sends WhatsApp message after screening.
+
 ### `/screening/teacher/add-student/`
 **Method:** GET, POST  
 **Authentication:** Requires TEACHER, ORG_ADMIN role, or superuser  
-**Description:** Form to add a new student and create their initial screening in one step. Auto-generates student code, creates guardian if needed, and sends WhatsApp message after screening.
+**Description:** Form to add a new student and create their initial screening in one step. Auto-generates student code, creates guardian if needed, and sends WhatsApp message after screening. (Legacy non-token route kept for backward compatibility)
 
 ### `/screening/teacher/screen/<int:student_id>/`
 **Method:** GET, POST  
@@ -67,6 +77,11 @@ Complete list of all URL endpoints in the Nutrilift project with descriptions.
 **CSRF:** Exempt  
 **Description:** WhatsApp webhook endpoint for Meta Cloud API. GET method handles webhook verification during Meta setup. POST method receives message status updates (sent, delivered, read, failed) and updates MessageLog records accordingly.
 
+### `/whatsapp/preview/<int:log_id>/`
+**Method:** GET  
+**Authentication:** None required (but typically accessed from authenticated contexts)  
+**Description:** Preview page for WhatsApp messages that shows the pre-filled message content and provides a click-to-open WhatsApp link. Does not send messages automatically. Supports optional `?next=<url>` query parameter to redirect after preview. Works with RED_EDU_V1 and RED_ASSIST_V1 template codes.
+
 ---
 
 ## Assistance Module (`/assist/`)
@@ -95,6 +110,21 @@ Complete list of all URL endpoints in the Nutrilift project with descriptions.
 **Method:** POST  
 **Authentication:** Requires ORG_ADMIN role or superuser  
 **Description:** Forward a single assistance application to SAPA by changing its status from APPLIED to FORWARDED. Updates forwarding timestamp and user.
+
+### `/assist/admin/applications`
+**Method:** GET  
+**Authentication:** Requires ORG_ADMIN role or superuser  
+**Description:** Applications listing page showing all assistance applications filtered by status (APPLIED/FORWARDED). Displays application details including student information, guardian contacts, and application timestamps. Supports `?status=APPLIED` or `?status=FORWARDED` query parameters.
+
+### `/assist/admin/metrics/students/<slug:metric>`
+**Method:** GET  
+**Authentication:** Requires ORG_ADMIN role or superuser  
+**Description:** Student metrics listing page showing filtered students based on metric type. Supported metrics: `all` (total students), `screened`, `redflag`, `boys_screened`, `boys_redflag`, `girls_screened`, `girls_redflag`. Supports `?period=3m|6m|12m|18m|all` query parameter for time filtering. Shows student name, class, age, phone, and screening status in a paginated list.
+
+### `/assist/admin/metrics/applications/<slug:status>`
+**Method:** GET  
+**Authentication:** Requires ORG_ADMIN role or superuser  
+**Description:** Application metrics listing page showing applications filtered by status. Supported statuses: `pending` (FORWARDED applications), `approved` (APPROVED applications). Supports `?period=3m|6m|12m|18m|all` query parameter for time filtering based on forwarding/approval dates. Displays application details with student information and approval timestamps.
 
 ### `/assist/sapa/approvals`
 **Method:** GET  
@@ -200,13 +230,24 @@ Complete list of all URL endpoints in the Nutrilift project with descriptions.
 
 ---
 
+## Organizations Module (`/orgs/`)
+
+### `/orgs/start`
+**Method:** GET, POST  
+**Authentication:** Public (no authentication required)  
+**Description:** Organization signup and login page with two modes. Default mode is "signup" which creates a new organization with admin user account. Mode "login" (via `?mode=login`) allows existing users to authenticate. On successful signup or login, redirects to the assistance admin dashboard. Auto-generates unique screening link token for new organizations.
+
+---
+
 ## Notes
 
 - Most endpoints require organization context to be set (via middleware)
 - Role-based access control (RBAC) is enforced using `@require_roles` decorator
 - Many endpoints support filtering via query parameters
 - CSV exports default to 6-month periods but support custom date ranges
-- Public endpoints (QR codes, compliance forms, application forms) use token-based access
+- Public endpoints (QR codes, compliance forms, application forms, token-based teacher portal) use token-based access
 - WhatsApp integration uses webhook for status updates
 - All actions are logged via audit system
+- Token-based teacher portal routes allow public access without authentication using organization screening link tokens
+- Metric endpoints support pagination (50 items per page by default)
 

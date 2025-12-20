@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     "messaging",
     "assist",
     "program.apps.ProgramConfig",  # <- keep this dotted path
+    "grants",
+    "fulfillment",
     "reporting",                   # sprint 8
     "ops",                         # observability + backups
 ]
@@ -108,6 +110,11 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# --- Phase 2: Funding ---
+# Amount allocated from a grant for each approved enrollment.
+# Leave at 0 to disable grant bookkeeping.
+NUTRILIFT_GRANT_COST_PER_ENROLLMENT = os.getenv("NUTRILIFT_GRANT_COST_PER_ENROLLMENT", "0")
 
 # Admin URL (harden in staging/prod)
 ADMIN_URL = os.getenv("ADMIN_URL", "admin")

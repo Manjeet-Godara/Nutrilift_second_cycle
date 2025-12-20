@@ -1,5 +1,13 @@
 from django.urls import path
-from .views import assist_apply, assist_thanks, school_app_dashboard, forward_all, forward_one
+from .views import (
+    assist_apply,
+    assist_thanks,
+    school_app_dashboard,
+    forward_all,
+    forward_one,
+    verify_income,
+    reject_income,
+)
 from .views_sapa import (
     sapa_approvals_dashboard, sapa_approve_all, sapa_approve_top_n, sapa_reject_all
 )
@@ -14,6 +22,8 @@ urlpatterns = [
 
     # School admin dashboard
     path("assist/admin", school_app_dashboard, name="school_app_dashboard"),
+    path("assist/admin/verify-income/<int:app_id>", verify_income, name="verify_income"),
+    path("assist/admin/reject-income/<int:app_id>", reject_income, name="reject_income"),
     path("assist/admin/forward-all", forward_all, name="forward_all"),
     path("assist/admin/forward/<int:app_id>", forward_one, name="forward_one"),
     path("assist/sapa/approvals", sapa_approvals_dashboard, name="sapa_approvals_dashboard"),
