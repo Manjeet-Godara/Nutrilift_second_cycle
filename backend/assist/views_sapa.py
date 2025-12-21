@@ -9,10 +9,7 @@ from .services import approve_all, approve_top_n, reject_all
 from django.db import models
 from django.db.models import Count, Q
 
-try:
-    from grants.models import Grant
-except Exception:  # pragma: no cover
-    Grant = None  # type: ignore
+
 
 @require_roles(Role.SAPA_ADMIN, allow_superuser=True)
 def sapa_approvals_dashboard(request):
@@ -58,9 +55,6 @@ def sapa_approvals_dashboard(request):
             .count()
         )
 
-    grants = []
-    if Grant:
-        grants = Grant.objects.filter(status=Grant.Status.ACTIVE).select_related("grantor").order_by("title")
 
     return render(
         request,
@@ -70,7 +64,6 @@ def sapa_approvals_dashboard(request):
             "selected_school": selected_school,
             "pending": pending,
             "approved_count": approved,
-            "grants": grants,
         },
     )
 
@@ -81,8 +74,8 @@ def sapa_approve_all(request):
         return HttpResponseBadRequest("POST required")
     school_id = request.POST.get("school_id")
     org = get_object_or_404(Organization, pk=int(school_id))
-    grant_id = request.POST.get("grant_id") or None
-    _, count = approve_all(org, request.user, grant_id=int(grant_id) if grant_id else None)
+    
+    _, count = approve_all(org, request.user)
     return redirect(reverse("assist:sapa_approvals_dashboard") + f"?school={org.id}&ok=approved_all&n={count}")
 
 @require_roles(Role.SAPA_ADMIN, allow_superuser=True)
@@ -92,8 +85,8 @@ def sapa_approve_top_n(request):
     school_id = request.POST.get("school_id")
     n = int(request.POST.get("n","0"))
     org = get_object_or_404(Organization, pk=int(school_id))
-    grant_id = request.POST.get("grant_id") or None
-    _, approved, skipped = approve_top_n(org, n, request.user, grant_id=int(grant_id) if grant_id else None)
+    
+    _, approved, skipped = approve_top_n(org, n, request.user)
     return redirect(reverse("assist:sapa_approvals_dashboard") + f"?school={org.id}&ok=approved_top_n&n={approved}&skipped={skipped}")
 
 @require_roles(Role.SAPA_ADMIN, allow_superuser=True)

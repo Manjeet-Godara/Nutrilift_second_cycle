@@ -24,7 +24,6 @@ ORG_TYPE_TO_ROLE = {
     Organization.OrgType.NGO: Role.ORG_ADMIN,           # "School Admin"
     Organization.OrgType.SAPA: Role.SAPA_ADMIN,         # "SAPA Admin"
     Organization.OrgType.INDITECH: Role.INDITECH,       # "Inditech"
-    Organization.OrgType.GRANTOR: Role.GRANTOR,         # "Grantor"
     Organization.OrgType.MANUFACTURER: Role.MANUFACTURER,  # "Manufacturer"
     Organization.OrgType.LOGISTICS: Role.LOGISTICS,     # "Logistics Partner"
 }
@@ -58,8 +57,6 @@ def _redirect_for_membership(mem: OrgMembership):
     if role == Role.INDITECH:
         return redirect(reverse("reporting:inditech_dashboard"))  # /reporting/inditech
 
-    if role == Role.GRANTOR:
-        return redirect(reverse("orgs:grantor_home"))  # placeholder page
 
     if role == Role.MANUFACTURER:
         return redirect(reverse("fulfillment:manufacturer_po_list"))  # /fulfillment/manufacturer/production-orders
@@ -134,6 +131,4 @@ def org_start(request):
 
     return render(request, "orgs/start.html", {"mode": "signup", "signup_form": form, "login_form": OrgLoginForm()})
 
-@require_roles(Role.GRANTOR, allow_superuser=True)
-def grantor_home(request):
-    return render(request, "orgs/grantor_home.html", {})
+
