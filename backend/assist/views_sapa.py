@@ -19,6 +19,7 @@ def sapa_approvals_dashboard(request):
     # Schools with counts of forwarded & approved applications
     schools = (
         Organization.objects
+        .filter(org_type__in=[Organization.OrgType.SCHOOL, Organization.OrgType.NGO])
         .annotate(
             forwarded_count=Count(
                 "applications",
@@ -29,10 +30,9 @@ def sapa_approvals_dashboard(request):
                 filter=Q(applications__status=Application.Status.APPROVED),
             ),
         )
-        # If you only want schools that currently have pending-for-SAPA items:
-        # .filter(forwarded_count__gt=0)
         .order_by("name")
     )
+
 
     school_id = request.GET.get("school")
     selected_school = None
@@ -40,7 +40,12 @@ def sapa_approvals_dashboard(request):
     approved = 0
 
     if school_id:
-        selected_school = get_object_or_404(Organization, pk=int(school_id))
+        selected_school = get_object_or_404(
+            Organization,
+            pk=int(school_id),
+            org_type__in=[Organization.OrgType.SCHOOL, Organization.OrgType.NGO],
+        )
+
         pending = (
             Application.objects
             .select_related("student", "guardian")
