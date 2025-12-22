@@ -19,7 +19,8 @@ import socket
 
 SETTINGS_FILE = Path(__file__).resolve()
 PROJECT_ROOT = SETTINGS_FILE.parent.parent.parent  # Go up: nutrilift -> backend -> project_root
-load_dotenv(PROJECT_ROOT / '.env')
+load_dotenv(PROJECT_ROOT / ".env", override=False)
+
 
 # Auto-detect if running in Docker or locally
 def _is_docker():
@@ -45,7 +46,12 @@ if not IS_DOCKER:
         os.environ["CELERY_BROKER_URL"] = "redis://localhost:6379/0"
     if os.getenv("CELERY_RESULT_BACKEND", "").startswith("redis://redis:"):
         os.environ["CELERY_RESULT_BACKEND"] = "redis://localhost:6379/1"
+    if os.getenv("MYSQL_HOST") == "db":
+        os.environ["MYSQL_HOST"] = "127.0.0.1"
 
+    # Rate limiting Redis URL is independent of Celery and must be normalized too
+    if os.getenv("RATELIMIT_REDIS_URL", "").startswith("redis://redis:"):
+        os.environ["RATELIMIT_REDIS_URL"] = "redis://localhost:6379/0"
 # PHASE 11
 LOG_JSON = os.getenv("LOG_JSON", "1") == "1"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
