@@ -224,13 +224,19 @@ def assist_apply(request):
                         student.primary_guardian = g
                         student.save(update_fields=["primary_guardian"])
 
+                low_income = bool(getattr(screening, "is_low_income_at_screen", False))
                 app = Application.objects.create(
                     organization=screening.organization,
                     student=student,
                     guardian=g,
                     trigger_screening=screening,
-                    low_income_declared=bool(getattr(screening, "is_low_income_at_screen", False)),
-                    income_verification_status=Application.IncomeVerificationStatus.PENDING,
+                    low_income_declared=low_income,
+                    income_verification_status=(
+                        Application.IncomeVerificationStatus.VERIFIED if low_income
+                        else Application.IncomeVerificationStatus.PENDING
+                    ),
+                    income_verified_at=(timezone.now() if low_income else None),
+                    income_verified_by=(getattr(screening, "teacher", None) if low_income else None),
                     source=Application.Source.PARENT,
                     status=Application.Status.APPLIED,
                     form_lang=lang,
@@ -456,7 +462,6 @@ def forward_all(request):
         organization=org,
         status=Application.Status.APPLIED,
         low_income_declared=True,
-        income_verification_status=Application.IncomeVerificationStatus.VERIFIED,
     )
     updated = 0
     for app in pending.iterator():
@@ -483,7 +488,6 @@ def forward_one(request, app_id):
         organization=org,
         status=Application.Status.APPLIED,
         low_income_declared=True,
-        income_verification_status=Application.IncomeVerificationStatus.VERIFIED,
     )
     app.status = Application.Status.FORWARDED
     app.forwarded_at = timezone.now()
