@@ -77,7 +77,7 @@ INSTALLED_APPS = [
     # project apps
     "accounts",
     "orgs",
-    "roster",
+    "roster.apps.RosterConfig",
     "screening",
     "audit",
     "messaging",
