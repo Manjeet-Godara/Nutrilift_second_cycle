@@ -21,9 +21,9 @@ urlpatterns = [
     path("admin/dashboard/", views.admin_performance_dashboard, name="admin_performance_dashboard"),
 
     # Teacher flow
-    path("teacher/<slug:token>/", views.teacher_access_portal, name="teacher_access_portal"),
     path("teacher/auth-required/", views.teacher_auth_required, name="teacher_auth_required"),
     path("teacher/dashboard/", views.teacher_dashboard, name="teacher_dashboard"),
+    path("teacher/<slug:token>/", views.teacher_access_portal, name="teacher_access_portal"),
 
     # Parent flow (public, tokenized)
     path("p/<str:token>/video/", views.parent_video, name="parent_video"),

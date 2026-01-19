@@ -202,13 +202,19 @@ def prepare_screening_only_redflag_click_to_chat(request, screening) -> Tuple[Op
     if (screening.risk_level or "").upper() != "RED":
         return None, ""
 
-    guardian = screening.student.guardians.first()
+    guardian = getattr(screening.student, "primary_guardian", None)
+
+    # Fallback: StudentGuardian links
+    if guardian is None:
+        link = screening.student.guardian_links.select_related("guardian").first()
+        guardian = link.guardian if link else None
+
     if not guardian or not guardian.phone_e164:
         return None, ""
 
     org = screening.organization
     school_name = org.name or "School"
-    student_name = screening.student.name or "Student"
+    student_name = screening.student.full_name or "Student"
     screened_on = timezone.localtime(screening.screened_at).strftime("%Y-%m-%d")
 
     parent_token = build_parent_token(screening.id)
@@ -230,11 +236,10 @@ def prepare_screening_only_redflag_click_to_chat(request, screening) -> Tuple[Op
 
     log = MessageLog.objects.create(
         organization=org,
+        to_phone_e164=guardian.phone_e164,
+        channel="whatsapp",
         template_code="SCREENING_ONLY_RED_MULTI_V1",
         language="multi",
-        direction="OUTBOUND",
-        channel="whatsapp",
-        recipient=guardian.phone_e164,
         payload={
             "_prefill_text": prefill,
             "screening_id": screening.id,
@@ -243,6 +248,8 @@ def prepare_screening_only_redflag_click_to_chat(request, screening) -> Tuple[Op
             "result_url": result_url,
             "local_language_code": local_code,
         },
+        status=MessageLog.Status.QUEUED,
+        related_screening=screening,
     )
 
     return log, prefill

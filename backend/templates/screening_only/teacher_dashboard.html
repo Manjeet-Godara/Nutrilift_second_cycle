@@ -61,7 +61,7 @@
       <tbody>
         {% for s in students %}
           <tr>
-            <td>{{ s.name }}</td>
+            <td>{{ s.full_name }}</td>
             <td>
               {% if s.classroom %}
                 {{ s.classroom.grade }} - {{ s.classroom.division }}
@@ -80,7 +80,7 @@
               {% endif %}
             </td>
             <td>
-              <a class="btn" href="{{ screening_url(s.id) }}">Fill Screening form</a>
+              <a class="btn" href="{{ s.screening_url }}">Fill Screening form</a>
             </td>
           </tr>
         {% empty %}

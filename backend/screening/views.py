@@ -46,13 +46,21 @@ def _teacher_fk(request):
 
 def _auto_send_for_screening(request, s):
     from django.contrib import messages
-    guardian = s.student.guardians.first()
-    if not guardian or not guardian.phone_e164:
+
+    # Preferred source: Student.primary_guardian (this is what your forms populate)
+    guardian = getattr(s.student, "primary_guardian", None)
+
+    # Fallback: if you ever use StudentGuardian links, try that too
+    if guardian is None:
+        link = s.student.guardian_links.select_related("guardian").first()
+        guardian = link.guardian if link else None
+
+    if not guardian or not getattr(guardian, "phone_e164", None):
         messages.warning(request, "No parent phone number is available; cannot prepare WhatsApp message.")
         return None
 
     try:
-        # Screening-only orgs: multi-language parent WhatsApp message:contentReference[oaicite:23]{index=23}
+        # Screening-only orgs: multi-language parent WhatsApp message
         try:
             s.organization.screening_only_profile
             is_screening_only = True
@@ -73,6 +81,7 @@ def _auto_send_for_screening(request, s):
         logger.exception("Auto-send whatsapp failed")
         messages.error(request, "Could not prepare WhatsApp message.")
         return None
+
 
 
 @require_teacher_or_public

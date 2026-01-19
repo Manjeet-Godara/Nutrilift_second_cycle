@@ -17,7 +17,8 @@
 <body>
   <div class="card">
     <h2>Screening Result</h2>
-    <p><strong>Child:</strong> {{ screening.student.name }}</p>
+    <p><strong>Child:</strong> {{ screening.student.full_name }}</p>
+
     <p><strong>Date:</strong> {{ screening.screened_at|date:"Y-m-d" }}</p>
 
     <p>

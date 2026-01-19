@@ -14,7 +14,7 @@ from messaging.i18n import flags_to_text
 from accounts.models import Organization, OrgMembership, Role
 from roster.models import Classroom, Student
 from screening.models import Screening
-
+from django.db.models import OuterRef, Subquery, Q
 from .decorators import require_screening_only_admin, require_screening_only_teacher
 from .forms import SchoolEnrollmentForm, TeacherAccessForm
 from .google_oauth import (
@@ -477,7 +477,11 @@ def teacher_dashboard(request: HttpRequest) -> HttpResponse:
         students = students.filter(classroom_id=classroom_id)
 
     if q:
-        students = students.filter(name__icontains=q)
+        students = students.filter(
+            Q(first_name__icontains=q) |
+            Q(last_name__icontains=q) |
+            Q(student_code__icontains=q)
+        )
 
     # Annotate last screening
     from django.db.models import OuterRef, Subquery
@@ -487,7 +491,10 @@ def teacher_dashboard(request: HttpRequest) -> HttpResponse:
         last_screening_id=Subquery(last_screening.values("id")[:1]),
         last_screened_at=Subquery(last_screening.values("screened_at")[:1]),
         last_risk=Subquery(last_screening.values("risk_level")[:1]),
-    ).order_by("name")
+    ).order_by("last_name", "first_name", "id")
+
+    for s in students:
+        s.screening_url = reverse("screening_create", args=[s.id]) + f"?lang={lang}"
 
     # NOTE: The actual screening form is handled by existing screening_create in screening/views.py as requested.
     # We link to /screening/teacher/screen/<student_id>/?lang=<lang>
@@ -507,7 +514,7 @@ def teacher_dashboard(request: HttpRequest) -> HttpResponse:
             "q": q,
             "lang": lang,
             "students": students,
-            "screening_url": screening_url,
+            # "screening_url": screening_url,
             "add_student_url": add_student_url,
             "cycle_start": cycle_start,
         },
